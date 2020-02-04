@@ -1,0 +1,91 @@
+---
+title: "NOAA Storm Data Analysis"
+author: "Philong Ho"
+date: "2/4/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# NOAA Storm Data Analysis: Exploring the Impact of Weather Events
+
+## Synopsis
+Storms and other severe weather events can cause both public health and economic problems for communities and municipalities. Many severe events can result in fatalities, injuries, and property damage, and preventing such outcomes to the extent possible is a key concern.
+
+This project involves exploring the U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database. This database tracks characteristics of major storms and weather events in the United States, including when and where they occur, as well as estimates of any fatalities, injuries, and property damage.
+
+Through our analysis, we have found that one type of weather event would produce the most significant damaging results while all other events were less damaging in comparision. 
+
+## Data Processing
+The data for this assignment come in the form of a comma-separated-value file compressed via the bzip2 algorithm to reduce its size. You can download the file from the course web site: 
+
+* [Storm Data [47mb]](https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2)
+
+There is also some documentation of the database available. Here you will find how some of the variables are constructed/defined.
+
+* National Weather Service [Storm Data Documentation](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf)
+
+* National Climatic Data Center Storm Events [FAQ](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2FNCDC%20Storm%20Events-FAQ%20Page.pdf)
+
+The events in the database start in the year 1950 and end in November 2011. In the earlier years of the database there are generally fewer events recorded, most likely due to a lack of good records. More recent years should be considered more complete.
+
+Since the data is in the form of a comma-separated-value (csv) file, we can use the read.csv() function to read it.
+```{r, cache = TRUE}
+storm_data <- read.csv("repdata_data_Stormdata.csv", sep = ",", header = TRUE)
+str(storm_data)
+```
+
+The data has 902297 observations and 37 variables, but we only need data relevant to the weather events and its impact. We can create a new dataset with these characteristics. 
+```{r, cache = TRUE}
+storm_data1 <- storm_data[, c("EVTYPE", "FATALITIES", "INJURIES", "PROPDMG", "PROPDMGEXP", "CROPDMG", "CROPDMGEXP")]
+str(storm_data1)
+```
+
+Looking at the str of storm_data1, we can see that there are variables named "PROPDMGEXP" and "CROPDMGEXP". These are the exponent values of "PROPDMG" and "CROPDMG" respectively and they are characterized by "H,h,K,k,M,m,B,b,+,-,?,0,1,2,3,4,5,6,7,8, and blank-character". We need only concern ourselves with the values "H, K, M, B" which are 100, 1000, 10^6, and 10^9 respectively. We can create new columns in storm_data1 to properly reflect the values of the property and crop damage. 
+```{r}
+storm_data1$REALPROP = 0
+storm_data1[storm_data1$PROPDMGEXP == "H", ]$REALPROP = storm_data1[storm_data1$PROPDMGEXP == "H", ]$PROPDMG * 100
+storm_data1[storm_data1$PROPDMGEXP == "K", ]$REALPROP = storm_data1[storm_data1$PROPDMGEXP == "K", ]$PROPDMG * 1000
+storm_data1[storm_data1$PROPDMGEXP == "M", ]$REALPROP = storm_data1[storm_data1$PROPDMGEXP == "M", ]$PROPDMG * 10^6
+storm_data1[storm_data1$PROPDMGEXP == "B", ]$REALPROP = storm_data1[storm_data1$PROPDMGEXP == "B", ]$PROPDMG * 10^9
+
+storm_data1$REALCROP = 0
+storm_data1[storm_data1$CROPDMGEXP == "H", ]$REALCROP = storm_data1[storm_data1$CROPDMGEXP == "H", ]$CROPDMG * 100
+storm_data1[storm_data1$CROPDMGEXP == "K", ]$REALCROP = storm_data1[storm_data1$CROPDMGEXP == "K", ]$CROPDMG * 1000
+storm_data1[storm_data1$CROPDMGEXP == "M", ]$REALCROP = storm_data1[storm_data1$CROPDMGEXP == "M", ]$CROPDMG * 10^6
+storm_data1[storm_data1$CROPDMGEXP == "B", ]$REALCROP = storm_data1[storm_data1$CROPDMGEXP == "B", ]$CROPDMG * 10^9
+```
+
+## Results
+First, we can look at the number of fatalities by weather event. 
+```{r}
+library(ggplot2)
+fatalities <- aggregate(FATALITIES ~ EVTYPE, data = storm_data1, sum)
+fatalities <- fatalities[order(fatalities$FATALITIES, decreasing = TRUE), ][1:15, ] ## In decreasing order by top 15 events
+g <- ggplot(fatalities, aes(x = reorder(EVTYPE, -FATALITIES), y = FATALITIES, fill = EVTYPE))
+g + geom_bar(stat = "identity") + theme(axis.text.x = element_text(angle = 90)) + xlab("Weather Event") + ylab("Fatalities") + ggtitle("Number of Fatalities by Top 15 Weather Events")
+```
+
+We can see that Tornadoes cause the most fatalities in comparison to the other events.
+
+Second, we can look at the number of injuries by weather event.
+```{r}
+injuries <- aggregate(INJURIES ~ EVTYPE, data = storm_data1, sum)
+injuries <- injuries[order(injuries$INJURIES, decreasing = TRUE), ][1:15, ]
+g1 <- ggplot(injuries, aes(x = reorder(EVTYPE, -INJURIES), y = INJURIES, fill = EVTYPE))
+g1 + geom_bar(stat = "identity") + theme(axis.text.x = element_text(angle = 90)) + xlab("Weather Event") + ylab("Injuries") + ggtitle("Number of Injuries by Top 15 Weather Events")
+```
+
+Here, we can see that Tornadoes are once again leading over the other events. 
+
+Lastly, we can look at the total property and crop damage by weather event. 
+```{r}
+propcrop <- aggregate(REALPROP+REALCROP ~ EVTYPE, data = storm_data1, sum)
+names(propcrop) <- c("EVTYPE", "TOTALDMG")
+propcrop <- propcrop[order(propcrop$TOTALDMG, decreasing = TRUE), ][1:15, ]
+g2 <- ggplot(propcrop, aes(x = reorder(EVTYPE, -TOTALDMG), y = TOTALDMG, fill = EVTYPE))
+g2 + geom_bar(stat = "identity") + theme(axis.text.x = element_text(angle = 90)) + xlab("Weather Event") + ylab("Property + Crop Damage Costs") + ggtitle("Property and Damage Costs by Top 15 Weather Events")
+```
+
+Here, we can actually see that Floods are the leading cause of property and crop damage while Tornadoes are actually ranked third. 
